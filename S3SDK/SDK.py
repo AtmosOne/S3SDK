@@ -1,5 +1,5 @@
-import  boto3
-import  logging
+import boto3
+import logging
 
 
 class S3SDK:
@@ -8,21 +8,45 @@ class S3SDK:
 
         * s3 (boto3): Public static s3 object
     """
-    def __init__(self, credentials={}, bucket_name=''):
+    def __init__(self, bucket_name, credentials={}, region_name=None):
         self.credentials = credentials
+        if region_name is not None:
+            credentials['region_name'] = region_name
+        self.region_name = region_name
         self.s3 = S3SDK.init_s3_resource(credentials)
         self.bucket_name = bucket_name
 
     @staticmethod
     def init_s3_resource(credentials):
-        if len(list(credentials.keys())) > 0:
-            if 'aws_secret_access_key' in credentials and 'aws_access_key_id' in credentials:
-                return boto3.resource('s3',**credentials)
+        try:
+            if len(list(credentials.keys())) > 0:
+                if 'aws_secret_access_key' in credentials and \
+                   'aws_access_key_id' in credentials:
+                    return boto3.resource('s3', **credentials)
+                else:
+                    logging.error("Please, provide all credentials")
+                    raise ValueError("Incomplete credentials")
             else:
-                logging.error("Please, provide all credentials")
-                raise  ValueError("Incomplete credentials")
+                return boto3.resource('s3')
+        except Exception as exc:
+            logging.error(exc)
+
+    def create_bucket(self):
+        """Create an S3 bucket in a specified region
+
+            If a region is not specified, the bucket is created in the S3 default
+            region (us-east-1).
+
+            :param bucket_name: Bucket to create
+            :param region: String region to create bucket in, e.g., 'us-west-2'
+            :return: True if bucket created, else False
+        """
+        if self.region_name is None:
+            self.s3.create_bucket(Bucket=self.bucket_name)
         else:
-            return boto3.resource('s3')
+            location = {'LocationConstraint': self.region_name}
+            self.s3.create_bucket(Bucket=self.bucket_name,
+                                  CreateBucketConfiguration=location)  
 
     def list_buckets(self):
         """
@@ -35,6 +59,9 @@ class S3SDK:
         for bucket in self.s3.buckets.all():
             names.append(bucket.name)
         return names
+
+    def delete_bucket(self):
+        return self.s3.Bucket(self.bucket_name).delete()
 
     def list_objects(self):
         """
@@ -52,8 +79,14 @@ class S3SDK:
             s3_objects.append(s3_object.key)
         return s3_objects
 
-    def download_object():
-        pass
+    def download_object(self, fpath_in_bucket, fpath_local):
+        try:
+            self.s3.meta.client \
+                .download_file(self.bucket_name, fpath_in_bucket, fpath_local)
+            return True
+        except Exception as exc:
+            logging.error(exc)
+            return True
 
     def upload_object(self, fpath_in_bucket, fpath_local):
         """
@@ -63,8 +96,23 @@ class S3SDK:
                 * fpath_in_bucket (str): File path in bucket
                 * fpath_local (str): File path in local machine
         """
-        self.s3.Object(self.bucket_name,
-                       fpath_in_bucket).upload_file(Filename=fpath_local)
+        try:
+            self.s3.Object(self.bucket_name,
+                           fpath_in_bucket).upload_file(Filename=fpath_local)
+            return True
+        except Exception as exc:
+            logging.error(exc)
+            return False
 
-    def delete_object():
-        pass
+    def delete_object(self, fpath: str):
+        """
+            Arguments:
+                * fpath (str): Absolute fpath in buckets
+                               (use list_obj)
+        """
+        try:
+            self.s3.Object(self.bucket_name, fpath).delete()
+            return True
+        except Exception as exc:
+            logging.error(exc)
+            return False
