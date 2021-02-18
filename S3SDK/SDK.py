@@ -1,5 +1,36 @@
+import time
 import boto3
 import logging
+
+
+class SDKdecorators:
+    """
+        Decorators used to provide information about SDK state
+    """
+    @staticmethod
+    def check_error(func):
+        """
+            Decorator to show errors if such present
+            at execution bucket/object functionality.
+        """
+        def inner(*args, **kwargs):
+            try:
+                result = func(*args, **kwargs)
+                return result
+            except Exception as exc:
+                logging.error(exc)
+                return
+        return inner
+
+    @staticmethod
+    def measure_time(func):
+        def inner1(*args, **kwargs):
+            begin = time.time()
+            result = func(*args, **kwargs)
+            end = time.time()
+            logging.info(f"Time taken: {end-begin}")
+            return result
+        return inner1
 
 
 class S3SDK:
@@ -17,6 +48,7 @@ class S3SDK:
         self.bucket_name = bucket_name
 
     @staticmethod
+    @SDKdecorators.check_error
     def init_s3_resource(credentials):
         try:
             if len(list(credentials.keys())) > 0:
@@ -31,11 +63,13 @@ class S3SDK:
         except Exception as exc:
             logging.error(exc)
 
+    @SDKdecorators.check_error
     def create_bucket(self):
-        """Create an S3 bucket in a specified region
+        """
+            Create an S3 bucket in a specified region
 
-            If a region is not specified, the bucket is created in the S3 default
-            region (us-east-1).
+            If a region is not specified, the bucket is
+            created in the S3 default region (us-east-1).
 
             :param bucket_name: Bucket to create
             :param region: String region to create bucket in, e.g., 'us-west-2'
@@ -48,6 +82,7 @@ class S3SDK:
             self.s3.create_bucket(Bucket=self.bucket_name,
                                   CreateBucketConfiguration=location)  
 
+    @SDKdecorators.check_error
     def list_buckets(self):
         """
             Iterates all objects, extracts their names and returns back
@@ -60,9 +95,11 @@ class S3SDK:
             names.append(bucket.name)
         return names
 
+    @SDKdecorators.check_error
     def delete_bucket(self):
         return self.s3.Bucket(self.bucket_name).delete()
 
+    @SDKdecorators.check_error
     def list_objects(self):
         """
             Connects to bucket and returns all file names present inside
@@ -79,6 +116,8 @@ class S3SDK:
             s3_objects.append(s3_object.key)
         return s3_objects
 
+    @SDKdecorators.measure_time
+    @SDKdecorators.check_error
     def download_object(self, fpath_in_bucket, fpath_local):
         try:
             self.s3.meta.client \
@@ -88,6 +127,8 @@ class S3SDK:
             logging.error(exc)
             return True
 
+    @SDKdecorators.measure_time
+    @SDKdecorators.check_error
     def upload_object(self, fpath_in_bucket, fpath_local):
         """
             Uploads file from local to bucket and
@@ -104,6 +145,7 @@ class S3SDK:
             logging.error(exc)
             return False
 
+    @SDKdecorators.check_error
     def delete_object(self, fpath: str):
         """
             Arguments:
